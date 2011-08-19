@@ -1,4 +1,5 @@
-application: webapp2template
+# app config copied from dark-tipfy
+application: yourappid
 version: 1
 runtime: python
 api_version: 1
@@ -69,6 +70,13 @@ handlers:
   mime_type: text/x-component
   static_files: static/\1
   upload: static/(.*\.htc)
+
+## display html from template instead of static
+#- url: /(.*\.html)
+#  mime_type: text/html
+#  static_files: static/\1
+#  upload: static/(.*\.html)
+#  expiration: "1h"
 
 - url: /(.*\.ico)
   mime_type: image/x-icon
@@ -193,9 +201,32 @@ handlers:
 - url: /(.*\.(bz2|gz|rar|tar|tgz|zip))
   static_files: static/\1
   upload: static/(.*\.(bz2|gz|rar|tar|tgz|zip))
+
+# additional appengine tools
+
 - url: /_ah/queue/deferred
   script: main.py
   login: admin
+  secure: always
+
+- url: /remote_api
+  script: $PYTHON_LIB/google/appengine/ext/remote_api/handler.py
+  login: admin
+  secure: always
+
+- url: /mapreduce(/.*)?
+  script: $PYTHON_LIB/google/appengine/ext/mapreduce/main.py
+  # use this for local map reduce
+  # script: mapreduce/main.py
+  login: admin
+  secure: always
+
+# ereporter - http://code.google.com/appengine/articles/python/recording_exceptions_with_ereporter.html
+- url: /_ereporter.*
+  script: $PYTHON_LIB/google/appengine/ext/ereporter/report_generator.py
+  login: admin
+
+# main code
 
 - url: /.*
   script: main.py
