@@ -99,10 +99,21 @@ class BaseHandler(webapp2.RequestHandler):
             return self.render_response('error_handlers/500.html', **self.context)
 
     def context_processor(self, context, forms=True):
-        context.update({
-            'login_url': users.create_login_url(self.request.url),
-            'logout_url': users.create_logout_url("/"),
-            })
+        user = users.get_current_user()
+        admin = users.is_current_user_admin()
+
+        if user:
+            context.update({
+                'user': user,
+                'admin': admin,
+                'logout_url': users.create_logout_url("/"),
+                })
+        else:
+            context.update({
+                'user': None,
+                'login_url': users.create_login_url(self.request.url),
+                })
+
         return None
 
 

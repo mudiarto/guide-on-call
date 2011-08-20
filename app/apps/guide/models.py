@@ -11,6 +11,10 @@
     that contain translation for all general instruction, etc
 
 
+
+    language short code is based on : http://www.loc.gov/standards/iso639-2/php/code_list.php
+
+
 """
 
 from google.appengine.ext import db
@@ -98,6 +102,9 @@ class Document(db.Model):
     # tts configuration
     # none for now
 
+    # cache for available languages, when a translation is published, it should update this list as well
+    translations = db.StringListProperty()
+
 
     @classmethod
     def create(cls, **kwargs):
@@ -118,10 +125,43 @@ class Document(db.Model):
 
         return db.run_in_transaction_custom_retries(3, txn)
 
+    @classmethod
+    def add_translation(cls, doc, lang_code):
+
+       def txn():
+            new_doc = Document.get(doc.key())
+            new_doc.translations.append(lang_code)
+            new_doc.put()
+            return new_doc
+
+       return db.run_in_transaction_custom_retries(3, txn)
+
+    @classmethod
+    def remove_translation(cls, doc, lang_code):
+
+       def txn():
+            new_doc = Document.get(doc.key())
+            try:
+                new_doc.translations.remove(lang_code)
+                new_doc.put()
+            except:
+                pass # do nothing on error
+            return new_doc
+
+       return db.run_in_transaction_custom_retries(3, txn)
+
+
 
     @classmethod
     def get_by_number(cls, number):
         return cls.all().filter('number =', number).get()
+
+
+    def get_published(self, n=1000):
+        """
+            get published document translation
+        """
+        return DocumentTranslation.all().ancestor(self).filter('status =', DocumentTranslation.PUBLISHED).fetch(n)
 
 
     def get_original(self, number):
@@ -135,12 +175,16 @@ class Language(db.Model):
     """
         Language description
         parent -> None
-        key -> lang (language short code)
+        key -> lang (language short code), based on ISO_639-1 / 639-2 code
     """
     # lang = db.StringProperty(required=True) # will be used as key_name
     language = db.StringProperty(required=True) # language name -> English, Spanish
     phone_number = db.StringProperty() # a phone number used to reach this translation
     description = db.TextProperty() # language description (optional)
+
+    @property 
+    def lang(self):
+        return self.key().name()
 
     @classmethod
     def create(cls, lang_code, **kwargs):
@@ -157,6 +201,94 @@ class Language(db.Model):
             return language
 
         return db.run_in_transaction_custom_retries(3, txn)
+
+    @classmethod
+    def get_by_code(cls, lang_code):
+        key = db.Key.from_path('Language', lang_code)
+        return Language.get(key)
+
+    def translation_available(self, document, n=1000):
+        """
+            check if translation available for a document
+            return DocumentTranslation if available, else None
+        """
+        key = db.Key.from_path("DocumentTranslation", self.lang, parent=document.key())
+        doc_translation = DocumentTranslation.get(key)
+        return doc_translation is not None and doc_translation.status == DocumentTranslation.PUBLISHED
+
+    def get_documents(self, n=1000):
+        """
+            get documents available for this language
+        """
+        keys = DocumentTranslation.all(keys_only=True).filter('status =', DocumentTranslation.PUBLISHED).filter('lang =', self.key().name()).fetch(n)
+        doc_keys = [key.parent() for key in keys]
+        return Document.get(doc_keys)
+
+
+class DocumentTranslation(db.Model):
+    """
+        This model is used to keep track of what translation available for specific documents
+
+        parent: document
+        key: lang (language short code)
+    """
+    DRAFT = 0
+    PUBLISHED = 1
+
+    status = db.IntegerProperty(default=DRAFT) # status of translation-> 0:draft 1:published, only published translation / guide is shown
+    lang = db.StringProperty(required=True) # lang code, just in case we need to query per language
+    # root_lang = db.StringProperty()  # FUTURE: root language. Example, us-en root is en. Used in case we can't find a translation for specific text, we can get it from their root language
+    # note = db.TextProperty()  # FUTURE: translator note
+
+
+    @classmethod
+    def create(cls, document, lang_code, **kwargs):
+
+        if not lang_code:
+            raise ValueError("required field(lang_code) missing")
+
+        def txn():
+            doc_translation = DocumentTranslation(key_name=lang_code, parent=document.key(), lang=lang_code, **kwargs)
+            doc_translation.put()
+            return doc_translation 
+
+        return db.run_in_transaction_custom_retries(3, txn)
+
+
+    @classmethod
+    def get_published_keys(cls, n=1000):
+        """
+            get keys for all published translation for all documents.
+            based on the key, we can construct which documents available for which languages
+            TODO: can be put in memcached later, since this value should not change too much, and only changed when
+                there is new document or new translation published
+        """
+
+        return DocumentTranslation.all(keys_only=True).filter('status =', DocumentTranslation.PUBLISHED).fetch(n)
+
+    def publish(self):
+        doc = self.parent()
+
+        if self.status == self.DRAFT:
+            Document.add_translation(doc, self.lang)
+            self.status = self.PUBLISHED
+            self.put()
+            return True
+        return False
+
+    def unpublish(self):
+        doc = self.parent()
+
+        if self.status == self.PUBLISHED:
+            Document.remove_translation(doc, self.lang)
+            self.status = self.DRAFT
+            self.put()
+            return True
+        return False
+
+
+
+
 
 
 class Original(db.Model):

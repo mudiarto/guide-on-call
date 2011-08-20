@@ -2,28 +2,18 @@ from apps.base.handlers import BaseHandler
 import logging
 
 from webapp2_extras.appengine.users import login_required
+from google.appengine.api import users
 
 class HomeHandler(BaseHandler):
     def get(self, **kwargs):
-        self.response.write('This is the HomeHandler.')
 
-class HomeFlatpageHandler(BaseHandler):
-    def get(self, template, **kwargs):
-        return self.render_response('%s.html'%template, **kwargs)
+        # get all documents
+        # get all available translations
+        context = {
 
-    def handle_exception(self, exception, debug=False):
-        # for flatpage, if we can't find the file, just throw 404
-        self.abort(404)
+        }
 
-class HomeProtectedFlatpageHandler(BaseHandler):
-    @login_required
-    def get(self, template, **kwargs):
-        return self.render_response('%s.html'%template, **kwargs)
-
-    def handle_exception(self, exception, debug=False):
-        # for flatpage, if we can't find the file, just throw 404
-        self.abort(404)
-
+        return self.render_response('index.html', **kwargs)
 
 
 class ExceptionTestHandler(BaseHandler):
