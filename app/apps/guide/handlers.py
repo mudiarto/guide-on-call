@@ -1,29 +1,21 @@
 from apps.base.handlers import BaseHandler
 import logging
 
+from apps.guide.models import Language
+
 from webapp2_extras.appengine.users import login_required
 
-class HomeHandler(BaseHandler):
+class ManageHandler(BaseHandler):
     def get(self, **kwargs):
-        self.response.write('This is the HomeHandler.')
+        return self.render_response('manage.html', **kwargs)
 
-class HomeFlatpageHandler(BaseHandler):
-    def get(self, template, **kwargs):
-        return self.render_response('%s.html'%template, **kwargs)
-
-    def handle_exception(self, exception, debug=False):
-        # for flatpage, if we can't find the file, just throw 404
-        self.abort(404)
-
-class HomeProtectedFlatpageHandler(BaseHandler):
+class LanguageLookupHandler(BaseHandler):
     @login_required
-    def get(self, template, **kwargs):
-        return self.render_response('%s.html'%template, **kwargs)
-
-    def handle_exception(self, exception, debug=False):
-        # for flatpage, if we can't find the file, just throw 404
+    def get(self, lang, **kwargs):
+        language = Language.get_by_code(lang)
+        if language:
+            self.render_json_response(language.to_dict())
         self.abort(404)
-
 
 
 class ExceptionTestHandler(BaseHandler):

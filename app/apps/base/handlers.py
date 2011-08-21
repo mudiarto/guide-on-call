@@ -2,12 +2,12 @@ import logging
 import os
 
 from google.appengine.api import users
-from django.utils import simplejson
 #from tipfy import RequestHandler, Response
 #from tipfy.auth import UserRequiredIfAuthenticatedMiddleware
 #from tipfy.sessions import SessionMiddleware
 #from tipfy.json import json_encode, json_decode
 #from tipfy.utils import render_json_response
+from config import config
 
 
 #import markdown2
@@ -16,10 +16,30 @@ import sys
 import traceback
 
 import webapp2
-from webapp2_extras import jinja2
+from webapp2_extras import jinja2 as wa_jinja2
+import jinja2
 
 from utils import safe_int
 from google.appengine.api import mail
+
+
+try:
+    # Preference for installed library with updated fixes.
+    import simplejson as json
+except ImportError:
+    try:
+        # Standard library module in Python 2.6.
+        import json
+    except (ImportError, AssertionError):
+        try:
+            # Google App Engine.
+            from django.utils import simplejson as json
+        except ImportError:
+            raise RuntimeError(
+                'A JSON parser is required, e.g., simplejson at '
+                'http://pypi.python.org/pypi/simplejson/')
+
+
 
 
 def linebreaker(value):
@@ -50,15 +70,53 @@ def dt_strftime(dt, format):
     if dt and format:
         return dt.strftime(format)
 
+def url_for(_name, *args, **kwargs):
+    """A proxy to :meth:`Router.url_for`.
+
+    .. seealso:: :meth:`Router.url_for`.
+    """
+    request = webapp2.get_request()
+    return webapp2.uri_for(_name, request, *args, **kwargs)
+
+
+
 
 def jinja_helpers_env(env):
     """
     register our helpers to jinja environment
     """
+    env.globals['url_for']=url_for
     env.globals['linebreak']=linebreaker
     env.globals['urlquote']=urlquote
     env.globals['pluralize']=pluralize
     env.globals['strftime']=dt_strftime
+
+
+def json_encode(value, *args, **kwargs):
+    """
+    from tipfy/json.py
+
+    Serializes a value to JSON.
+
+    :param value:
+        A value to be serialized.
+    :param args:
+        Extra arguments to be passed to `json.dumps()`.
+    :param kwargs:
+        Extra keyword arguments to be passed to `json.dumps()`.
+    :returns:
+        The serialized value.
+    """
+    # JSON permits but does not require forward slashes to be escaped.
+    # This is useful when json data is emitted in a <script> tag
+    # in HTML, as it prevents </script> tags from prematurely terminating
+    # the javscript.  Some json libraries do this escaping by default,
+    # although python's standard library does not, so we do it here.
+    # http://stackoverflow.com/questions/1580647/json-why-are-forward-slashes-escaped
+    kwargs.setdefault('separators', (',', ':'))
+    return json.dumps(value, *args, **kwargs).replace("</", "<\\/")
+
+
 
 
 # ----- Handlers -----
@@ -68,7 +126,10 @@ class BaseHandler(webapp2.RequestHandler):
     @webapp2.cached_property
     def jinja2(self):
         # Returns a Jinja2 renderer cached in the app registry.
-        return jinja2.get_jinja2(app=self.app)
+        jj2 = wa_jinja2.get_jinja2(app=self.app)
+        env = jj2.environment
+        jinja_helpers_env(env)
+        return jj2
 
 
     def render_response(self, _template, **context):
@@ -77,9 +138,14 @@ class BaseHandler(webapp2.RequestHandler):
         rv = self.jinja2.render_template(_template, **context)
         self.response.write(rv)
 
-    def handle_exception(self, exception, debug):
+    def render_json_response(self, json_data):
+        self.context_processor(json_data)
+        self.response.headers['Content-Type'] = "application/json"
+        self.response.write(json_encode(json_data))
 
-        app_config = self.config["app"]
+
+    def handle_exception(self, exception, debug):
+        app_config = config["app"]
 
         if debug: # debug_mode:
             return super(BaseHandler, self).handle_exception(exception, debug)

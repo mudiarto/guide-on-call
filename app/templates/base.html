@@ -24,6 +24,9 @@
   <!-- CSS: implied media=all -->
   <!-- CSS concatenated and minified via ant build script-->
   <link rel="stylesheet" href="/css/style.css">
+  {% block style %}
+  {% endblock %}
+  <link rel="stylesheet" href="/css/helper.css">
   <!-- end CSS-->
 
   <!-- More ideas for your <head> here: h5bp.com/d/head-Tips -->
@@ -60,8 +63,10 @@
 
 
   <!-- scripts concatenated and minified via ant build script-->
-  <script defer src="/js/plugins.js"></script>
-  <script defer src="/js/script.js"></script>
+  {% block scripts %}
+    <script defer src="/js/plugins.js"></script>
+    <script defer src="/js/script.js"></script>
+  {% endblock %}
   <!-- end scripts-->
 
 	

@@ -150,6 +150,9 @@ class Document(db.Model):
 
        return db.run_in_transaction_custom_retries(3, txn)
 
+    @classmethod
+    def fetch(cls, n=1000):
+        return cls.all().fetch(n)
 
 
     @classmethod
@@ -179,7 +182,7 @@ class Language(db.Model):
     """
     # lang = db.StringProperty(required=True) # will be used as key_name
     language = db.StringProperty(required=True) # language name -> English, Spanish
-    phone_number = db.StringProperty() # a phone number used to reach this translation
+    phone = db.StringProperty() # a phone number used to reach this translation
     description = db.TextProperty() # language description (optional)
 
     @property 
@@ -223,6 +226,16 @@ class Language(db.Model):
         keys = DocumentTranslation.all(keys_only=True).filter('status =', DocumentTranslation.PUBLISHED).filter('lang =', self.key().name()).fetch(n)
         doc_keys = [key.parent() for key in keys]
         return Document.get(doc_keys)
+
+    def to_dict(self):
+        result = {
+                "lang": self.lang,
+                "language": self.language,
+                "phone": self.phone,
+        }
+        return result
+
+
 
 
 class DocumentTranslation(db.Model):
